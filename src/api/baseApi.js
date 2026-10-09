@@ -1,27 +1,11 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { setCredentials, logout } from '../features/auth/authSlice';
-import { getDeviceId, getDeviceName } from '../lib/device';
-
-const DEVICE_ENDPOINTS = new Set(['login', 'logout', 'changePassword']);
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: import.meta.env.VITE_API_URL,
-  prepareHeaders: (headers, { getState, endpoint }, extraOptions) => {
+  prepareHeaders: (headers, { getState }) => {
     const token = getState().auth.token;
     if (token) headers.set('Authorization', `Bearer ${token}`);
-
-    const isDeviceEndpoint =
-      DEVICE_ENDPOINTS.has(endpoint) ||
-      extraOptions?.withDeviceId === true;
-
-    if (isDeviceEndpoint) {
-      headers.set('X-Device-Id', getDeviceId());
-    }
-
-    if (endpoint === 'login') {
-      headers.set('X-Device-Name', getDeviceName());
-    }
-
     return headers;
   },
 });
@@ -59,8 +43,7 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
           method: 'POST',
           body: { refresh_token: refreshToken },
         },
-        api,
-        { withDeviceId: true }
+        api
       )
         .then((refreshResult) => {
           const payload = refreshResult.data?.data;
