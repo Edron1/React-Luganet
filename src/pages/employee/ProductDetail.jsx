@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useGetProductByIdQuery } from '../../features/products/productsApi';
+import { useAddToCartMutation } from '../../features/cart/cartApi';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -7,11 +9,31 @@ export default function ProductDetail() {
   const { data: product, isLoading, isError, error, refetch } =
     useGetProductByIdQuery(id, { skip: !id });
 
+  const [selectedOfferId, setSelectedOfferId] = useState(null);
+  const [addToCart, { isLoading: isAdding }] = useAddToCartMutation();
+
   const handleBack = () => navigate(-1);
+
+  // ВАЖНО: offers, не offerts
+  const selectedOffer = product?.offers?.find(
+    (o) => o.id === selectedOfferId
+  );
+
+  const handleAdd = async () => {
+    if (!selectedOffer) return;
+
+    try {
+      await addToCart({
+        offerId: selectedOffer.id,
+        quantity: 1,
+      }).unwrap();
+    } catch (err) {
+      console.error('add to cart failed', err);
+    }
+  };
 
   return (
     <div>
-      {/* Шапка */}
       <div className="flex items-center gap-3 mb-4">
         <button
           onClick={handleBack}
@@ -82,26 +104,30 @@ export default function ProductDetail() {
           {product.offers?.length > 0 && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
               <h3 className="text-slate-400 text-sm mb-3">
-                {product.offers.length > 1
-                  ? 'Варианты'
-                  : 'Предложение'}
+                {product.offers.length > 1 ? 'Варианты' : 'Предложение'}
               </h3>
 
               <div className="space-y-3">
                 {product.offers.map((offer) => (
-                  <OfferRow key={offer.id} offer={offer} />
+                  <OfferRow
+                    key={offer.id}
+                    offer={offer}
+                    selected={selectedOfferId === offer.id}
+                    onSelect={() => setSelectedOfferId(offer.id)}
+                  />
                 ))}
               </div>
             </div>
           )}
 
           <button
-            disabled
-            className="w-full py-3 rounded-xl bg-blue-600 text-white
-                       font-medium opacity-50 cursor-not-allowed"
-            title="Скоро"
+            onClick={handleAdd}
+            disabled={!selectedOffer || isAdding}
+            className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700
+                       text-white font-medium transition
+                       disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Добавить в корзину
+            {isAdding ? 'Добавление...' : 'Добавить в корзину'}
           </button>
         </div>
       )}
@@ -119,26 +145,50 @@ function Row({ label, value }) {
   );
 }
 
-function OfferRow({ offer }) {
+function OfferRow({ offer, selected, onSelect }) {
   const price = offer.price != null ? Number(offer.price) : null;
   const quantity = Number(offer.quantity ?? 0);
+  const isAvailable = quantity > 0;
 
   return (
-    <div className="flex items-center justify-between gap-3
-                    bg-white/[0.03] rounded-xl px-3 py-2.5">
-      <div className="text-sm text-slate-300">
-        {offer.package ?? 'Основное предложение'}
+    <button
+      type="button"
+      onClick={isAvailable ? onSelect : undefined}
+      disabled={!isAvailable}
+      className={`w-full text-left flex items-center justify-between gap-3
+                  rounded-xl px-3 py-3 border transition
+        ${selected
+          ? 'bg-blue-600/15 border-blue-500'
+          : 'bg-white/[0.03] border-transparent hover:bg-white/[0.06]'
+        }
+        ${!isAvailable ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+      `}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center
+            ${selected ? 'border-blue-500' : 'border-slate-500'}`}
+        >
+          {selected && (
+            <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+          )}
+        </div>
+
+        <div className="text-sm text-slate-300">
+          {offer.package?.name ?? offer.package ?? 'Основное предложение'}
+        </div>
       </div>
+
       <div className="text-right">
         <div className="text-white font-semibold">
           {price != null && price > 0 ? `${price} ₽` : '—'}
         </div>
         <div className={`text-xs ${
-          quantity > 0 ? 'text-emerald-400' : 'text-slate-500'
+          isAvailable ? 'text-emerald-400' : 'text-slate-500'
         }`}>
-          {quantity > 0 ? `${quantity} в наличии` : 'нет в наличии'}
+          {isAvailable ? `${quantity} в наличии` : 'нет в наличии'}
         </div>
       </div>
-    </div>
+    </button>
   );
 }
